@@ -1,0 +1,64 @@
+#!/bin/bash
+# run this script in the chroot
+
+# set up a hostname
+HOSTNAME=debian_xo1
+echo $HOSTNAME > /etc/hostname
+sed -i -e "s/localhost/localhost $HOSTNAME/" /etc/hosts
+
+apt-get -y install locales
+apt-get -y install wpasupplicant rpm2cpio wget acpid acpi olpc-kbdshim olpc-powerd olpc-xo1-hw initramfs-tools
+
+apt-get install xserver-xorg xserver-xorg-video-geode xfce4 mate-desktop-environment
+
+echo olpc:olpc | ghpasswd
+echo root:olpc | chpasswd
+
+cat << EOF > /etc/fstab
+/dev/mmcblk0p1  /         ext4    defaults,noatime,errors=remount-ro  0 0
+/swapfile none  swap    sw              0       0
+devpts     /dev/pts  devpts  gid=5,mode=620   0 0
+tmpfs      /dev/shm  tmpfs   defaults,size=50m         0 0
+proc       /proc     proc    defaults         0 0
+sysfs      /sys      sysfs   defaults         0 0
+/tmp            /tmp            tmpfs         rw,size=50m 0 0
+vartmp          /var/tmp        tmpfs         rw,size=50m 0 0
+varlog          /var/log        tmpfs         rw,size=20m 0 0
+EOF
+
+cd /
+wget http://dev.laptop.org/~kernels/public_rpms/f20-xo1/kernel-3.10.0_xo1-20130716.1755.olpc.c06da27.i686.rpm
+rpm2cpio kernel*.rpm | cpio -idmv
+cd /boot
+mv initrd-3.10.0_xo1-20130716.1755.olpc.c06da27.img initrd.img-3.10.0_xo1-20130716.1755.olpc.c06da27
+update-initramfs -t -c -u -k 3.10.0_xo1-20130716.1755.olpc.c06da27
+(cd /boot ; ln -s initrd.img-3.10.0_xo1-20130716.1755.olpc.c06da27 initrd.img)
+(cd /boot ; ln -s vmlinuz-3.10.0_xo1-20130716.1755.olpc.c06da27 vmlinuz )
+cd /
+rm kernel-3.10.0_xo1-20130716.1755.olpc.c06da27.i686.rpm
+
+# wifi firmware
+mkdir -p /lib/firmware/libertas
+cd /lib/firmware/libertas
+wget -O usb8388.bin http://dev.laptop.org/pub/firmware/libertas/usb8388-5.110.22.p22.bin
+
+# move the old olpc.fth out of the way
+mv /boot/olpc.fth /boot/olpc.fth.old
+cat << EOF > /boot/olpc.fth
+\ Debian Jessie for XO
+visible
+" last:\boot\initrd.img" to ramdisk
+" last:\boot\vmlinuz" to boot-device
+" console=tty0 fbcon=font:SUN12x22 root=/dev/mmcblk0p2" to boot-file
+boot
+EOF
+dd if=/dev/zero of=/swapfile bs=1M count=512
+mkswap /swapfile
+
+apt-get clean
+
+grep swappiness /etc/sysctl.conf
+if [ $? -ne 0 ]; then
+   echo vm.swappiness=5 >> /etc/sysctl.conf
+fi
+
