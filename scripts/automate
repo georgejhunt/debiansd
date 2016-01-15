@@ -1,0 +1,11 @@
+#!/bin/bash -x
+# run as non privileged user
+mkdir ~/debroot
+sudo apt-get install debootstrap binutils
+debootstrap --verbose --arch i386 jessie debroot ftp://ftp.us.debian.org/debian/
+sudo mount -o bind /dev/debroot/dev
+sudo mount -o bind /proc debroot/proc
+sudo mount -o bind /sys debroot/sys
+sudo mount -o bind /tmp deboot/tmp
+cp -f /etc/resolv.conf debroot/etc/resolv.conf
+sudo chroot ~/debroot
